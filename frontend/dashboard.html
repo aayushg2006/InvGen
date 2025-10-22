@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Invoice Generator</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>InvGen</h2>
+            </div>                    
+            <ul class="sidebar-nav">
+                <li class="active"><a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="products.html"><i class="fas fa-box"></i> Products</a></li>
+                <li><a href="recurring-invoices.html"><i class="fas fa-sync-alt"></i> Recurring</a></li>
+                <li><a href="quote-create.html"><i class="fas fa-plus"></i> Create Quote</a></li>
+                <li><a href="invoice-create.html"><i class="fas fa-plus"></i> Create Invoice</a></li>
+                <li><a href="quotes-list.html"><i class="fas fa-list-alt"></i> View Quotes</a></li>
+                <li><a href="invoices-list.html"><i class="fas fa-list"></i> View Invoices</a></li>
+                <li><a href="customers.html"><i class="fas fa-users"></i> Customers</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-pie"></i> Reports</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="theme-switcher">
+                    <i class="fas fa-sun"></i>
+                    <label class="switch">
+                        <input type="checkbox" id="theme-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <i class="fas fa-moon"></i>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <h1 class="main-title">Dashboard</h1>
+            
+            <div class="stats-cards">
+                <div class="stat-card">
+                    <div class="card-icon" style="background-color: #e0f2fe;"><i class="fas fa-rupee-sign" style="color: #0ea5e9;"></i></div>
+                    <div class="card-info">
+                        <span class="card-title">Revenue (This Month)</span>
+                        <span class="card-value" id="total-revenue">₹0.00</span>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="card-icon" style="background-color: #fef9c3;"><i class="fas fa-percent" style="color: #ca8a04;"></i></div>
+                    <div class="card-info">
+                        <span class="card-title">GST Payable</span>
+                        <span class="card-value" id="total-gst-payable">₹0.00</span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-icon" style="background-color: #fef9c3;"><i class="fas fa-hourglass-half" style="color: #ca8a04;"></i></div>
+                    <div class="card-info">
+                        <span class="card-title">Partially Paid</span>
+                        <span class="card-value" id="invoices-partially-paid">0</span>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-icon" style="background-color: #ffedd5;"><i class="fas fa-file-invoice-dollar" style="color: #f97316;"></i></div>
+                    <div class="card-info">
+                        <span class="card-title">Invoices Due</span>
+                        <span class="card-value" id="invoices-due">0</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="card-icon" style="background-color: #dcfce7;"><i class="fas fa-check-circle" style="color: #22c55e;"></i></div>
+                    <div class="card-info">
+                        <span class="card-title">Invoices Paid</span>
+                        <span class="card-value" id="invoices-paid">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap;">
+                <div class="card" id="low-stock-widget" style="display: none; flex: 1; min-width: 300px;">
+                    <div class="card-header">
+                        <h2>Low Stock Items</h2>
+                    </div>
+                    <div class="card-body">
+                        <ul id="low-stock-list" style="list-style-type: none; padding-left: 0;">
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="card" style="flex: 3; min-width: 400px;">
+                    <div class="card-header">
+                        <h2>Recent Invoices</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="product-table">
+                            <thead>
+                                <tr>
+                                    <th>Invoice #</th>
+                                    <th>Customer Name</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-invoices-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card" style="flex: 2; min-width: 300px;">
+                    <div class="card-header">
+                        <h2>Invoice Status</h2>
+                    </div>
+                    <div class="card-body" style="display: flex; justify-content: center; align-items: center;">
+                        <canvas id="invoiceStatusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/api.js"></script> 
+    <script src="js/theme.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>

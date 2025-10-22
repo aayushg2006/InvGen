@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Invoice - Invoice Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>InvGen</h2>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="products.html"><i class="fas fa-box"></i> Products</a></li>
+                <li><a href="recurring-invoices.html"><i class="fas fa-sync-alt"></i> Recurring</a></li>
+                <li><a href="quote-create.html"><i class="fas fa-plus"></i> Create Quote</a></li>
+                <li class="active"><a href="invoice-create.html"><i class="fas fa-plus"></i> Create Invoice</a></li>
+                <li><a href="quotes-list.html"><i class="fas fa-list-alt"></i> View Quotes</a></li>
+                <li><a href="invoices-list.html"><i class="fas fa-list"></i> View Invoices</a></li>
+                <li><a href="customers.html"><i class="fas fa-users"></i> Customers</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-pie"></i> Reports</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="theme-switcher">
+                    <i class="fas fa-sun"></i>
+                    <label class="switch">
+                        <input type="checkbox" id="theme-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <i class="fas fa-moon"></i>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Create New Invoice</h2>
+                </div>
+                <form id="invoiceForm" class="card-body">
+                    <div class="invoice-details">
+                        <div class="form-group">
+                            <label for="customerName">Customer Name</label>
+                            <input type="text" id="customerName" list="customer-list" placeholder="Select or type a customer name" required>
+                            <datalist id="customer-list"></datalist>
+                            
+                            <div id="credit-balance-alert" style="display: none; margin-top: 10px; padding: 10px; border: 1px solid var(--primary-color); border-radius: 6px; background-color: color-mix(in srgb, var(--primary-color) 10%, transparent);">
+                                <p style="margin: 0;">This customer has an available credit of <strong id="credit-balance-amount">₹0.00</strong>.</p>
+                                <label for="applyCredit" style="margin-top: 8px; font-weight: normal;">
+                                    <input type="checkbox" id="applyCredit">
+                                    Apply this credit to the new invoice
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="customerPhone">Customer Phone</label>
+                            <input type="tel" id="customerPhone" placeholder="Enter phone (for new customers)">
+                        </div>
+                        <div class="form-group">
+                            <label for="customerEmail">Customer Email</label>
+                            <input type="email" id="customerEmail" placeholder="Enter email (for new customers)">
+                        </div>
+                        <div class="form-group">
+                            <label for="paymentMethod">Payment Method</label>
+                            <select id="paymentMethod" required>
+                                <option value="CASH" selected>Cash</option>
+                                <option value="CARD">Card</option>
+                                <option value="UPI">UPI</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="invoiceNumber">Invoice Number</label>
+                            <input type="text" id="invoiceNumber" value="INV-..." readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="issueDate">Issue Date</label>
+                            <input type="date" id="issueDate" required>
+                        </div>
+                    </div>
+
+                    <table class="product-table invoice-items-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Discount %</th>
+                                <th>Total</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="invoice-items-body">
+                        </tbody>
+                    </table>
+                    <button type="button" id="addItemBtn" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Item</button>
+
+                    <div class="form-group" style="max-width: 250px; margin-top: 20px;">
+                        <label for="paymentStatus">Payment Status</label>
+                        <select id="paymentStatus" required>
+                            <option value="PENDING" selected>Pending</option>
+                            <option value="PARTIALLY_PAID">Partially Paid</option>
+                            <option value="PAID">Paid</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="initial-payment-group" style="max-width: 250px; display: none;">
+                        <label for="initialAmountPaid">Initial Amount Paid</label>
+                        <input type="number" id="initialAmountPaid" placeholder="0.00" step="0.01">
+                    </div>
+
+                    <div class="invoice-totals">
+                        <div><span>Subtotal:</span> <span id="subtotal">₹0.00</span></div>
+                        <div><span>GST:</span> <span id="gst">₹0.00</span></div>
+                        <div class="grand-total"><span>Grand Total:</span> <span id="grandTotal">₹0.00</span></div>
+                        
+                        <div id="credit-applied-row" style="display: none; color: #10B981; font-weight: 500;">
+                            <span>Credit Applied:</span> <span id="credit-applied">₹0.00</span>
+                        </div>
+                        <div id="balance-due-row" class="grand-total" style="display: none; color: var(--primary-color);">
+                            <span>Balance Due:</span> <span id="balance-due">₹0.00</span>
+                        </div>
+                    </div>
+                     <button type="submit" class="btn btn-primary" style="margin-top: 20px;"><i class="fas fa-save"></i> Save and Generate</button>
+                     <button type="button" id="saveAndEmailBtn" class="btn btn-secondary" style="margin-top: 20px;"><i class="fas fa-paper-plane"></i> Save and Email</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <template id="invoice-item-template">
+        <tr>
+            <td><select class="item-select" required></select></td>
+            <td><input type="number" class="item-qty" value="1" min="1" required></td>
+            <td><input type="number" class="item-price" readonly></td>
+            <td><input type="number" class="item-discount" value="0" min="0" max="100" step="0.01"></td>
+            <td class="item-total">₹0.00</td>
+            <td><button type="button" class="btn-delete"><i class="fas fa-trash"></i></button></td>
+        </tr>
+    </template>
+
+    <script src="js/api.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/invoice-create.js"></script>
+</body>
+</html>

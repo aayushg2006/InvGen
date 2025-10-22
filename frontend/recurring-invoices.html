@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recurring Invoices - Invoice Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>InvGen</h2>
+            </div>
+            <ul class="sidebar-nav">
+                <li><a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                <li><a href="products.html"><i class="fas fa-box"></i> Products</a></li>
+                <li class="active"><a href="recurring-invoices.html"><i class="fas fa-sync-alt"></i> Recurring</a></li>
+                <li><a href="quote-create.html"><i class="fas fa-plus"></i> Create Quote</a></li>
+                <li><a href="invoice-create.html"><i class="fas fa-plus"></i> Create Invoice</a></li>
+                <li><a href="quotes-list.html"><i class="fas fa-list-alt"></i> View Quotes</a></li>
+                <li><a href="invoices-list.html"><i class="fas fa-list"></i> View Invoices</a></li>
+                <li><a href="customers.html"><i class="fas fa-users"></i> Customers</a></li>
+                <li><a href="reports.html"><i class="fas fa-chart-pie"></i> Reports</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
+            </ul>
+             <div class="sidebar-footer">
+                <div class="theme-switcher">
+                    <i class="fas fa-sun"></i>
+                    <label class="switch">
+                        <input type="checkbox" id="theme-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <i class="fas fa-moon"></i>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <h1 class="main-title">Recurring Invoices</h1>
+
+            <div class="card" style="margin-bottom: 30px;">
+                <div class="card-header">
+                    <h2>Active Profiles</h2>
+                </div>
+                <div class="card-body">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th>Customer</th>
+                                <th>Frequency</th>
+                                <th>Start Date</th>
+                                <th>Next Invoice Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recurring-profiles-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Create New Recurring Profile</h2>
+                </div>
+                <form id="recurringForm" class="card-body">
+                    <div class="invoice-details">
+                        <div class="form-group">
+                            <label for="customerName">Customer</label>
+                            <input type="text" id="customerName" list="customer-list" placeholder="Select a customer" required>
+                            <datalist id="customer-list"></datalist>
+                        </div>
+                        <div class="form-group">
+                            <label for="frequency">Frequency</label>
+                            <select id="frequency" required>
+                                <option value="DAILY">Daily</option>
+                                <option value="WEEKLY">Weekly</option>
+                                <option value="MONTHLY" selected>Monthly</option>
+                                <option value="YEARLY">Yearly</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="startDate">Start Date</label>
+                            <input type="date" id="startDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="endDate">End Date (Optional)</label>
+                            <input type="date" id="endDate">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 15px;">
+                         <label for="autoSendEmail" style="display: flex; align-items: center; font-weight: 500;">
+                            <input type="checkbox" id="autoSendEmail" checked style="width: 16px; height: 16px; margin-right: 10px;">
+                            Automatically email invoice to customer on generation date
+                        </label>
+                    </div>
+
+                    <table class="product-table invoice-items-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th>Discount %</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recurring-items-body"></tbody>
+                    </table>
+                    <button type="button" id="addItemBtn" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Item</button>
+
+                    <div class="settings-actions" style="margin-top: 20px;">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Profile</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <template id="recurring-item-template">
+        <tr>
+            <td><select class="item-select" required></select></td>
+            <td><input type="number" class="item-qty" value="1" min="1" required></td>
+            <td><input type="number" class="item-discount" value="0" min="0" max="100" step="0.01"></td>
+            <td><button type="button" class="btn-delete"><i class="fas fa-trash"></i></button></td>
+        </tr>
+    </template>
+
+    <script src="js/api.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/recurring-invoices.js"></script>
+</body>
+</html>
