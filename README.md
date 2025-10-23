@@ -70,8 +70,6 @@ The application features a secure user authentication system, full CRUD function
 
 ## Environment Configuration
 
-You must create and configure your own `application.properties` file in `src/main/resources`. **Do not commit your secret keys to GitHub.**
-
 ```properties
 # MySQL Database Configuration
 spring.datasource.url=jdbc:mysql://localhost:3006/invoice
