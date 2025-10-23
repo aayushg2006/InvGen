@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Products - Invoice Generator</title>
+    <title>Expenses - Invoice Generator</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -15,8 +15,8 @@
             </div>
             <ul class="sidebar-nav">
                 <li><a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                <li class="active"><a href="products.html"><i class="fas fa-box"></i> Products</a></li>
-                <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
+                <li><a href="products.html"><i class="fas fa-box"></i> Products</a></li>
+                <li class="active"><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="recurring-invoices.html"><i class="fas fa-sync-alt"></i> Recurring</a></li>
                 <li><a href="quote-create.html"><i class="fas fa-plus"></i> Create Quote</a></li>
                 <li><a href="invoice-create.html"><i class="fas fa-plus"></i> Create Invoice</a></li>
@@ -26,7 +26,7 @@
                 <li><a href="reports.html"><i class="fas fa-chart-pie"></i> Reports</a></li>
                 <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
             </ul>
-            <div class="sidebar-footer">
+             <div class="sidebar-footer">
                 <div class="theme-switcher">
                     <i class="fas fa-sun"></i>
                     <label class="switch">
@@ -41,24 +41,21 @@
         <main class="main-content">
             <div class="card">
                 <div class="card-header">
-                    <h2>Manage Products</h2>
-                    <button id="addProductBtn" class="btn btn-primary"><i class="fas fa-plus"></i> Add New Product</button>
+                    <h2>Manage Expenses</h2>
+                    <button id="addExpenseBtn" class="btn btn-primary"><i class="fas fa-plus"></i> Add New Expense</button>
                 </div>
                 <div class="card-body">
                     <table class="product-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Product Name</th>
-                                <th>Cost Price</th>
-                                <th>Selling Price</th>
+                                <th>Date</th>
+                                <th>Description</th>
                                 <th>Category</th>
-                                <th>GST %</th>
-                                <th>Stock</th>
+                                <th>Amount</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="product-table-body">
+                        <tbody id="expenses-table-body">
                         </tbody>
                     </table>
                 </div>
@@ -66,48 +63,47 @@
         </main>
     </div>
 
-    <div id="productModal" class="modal-overlay">
+    <div id="expenseModal" class="modal-overlay">
         <form class="modal-content">
             <div class="modal-header">
-                <h2 id="modal-title">Add New Product</h2>
+                <h2 id="modal-title">Add New Expense</h2>
                 <button type="button" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="productName">Product Name</label>
-                    <input type="text" id="productName" placeholder="Enter product name" required>
+                    <label for="expenseDescription">Description</label>
+                    <input type="text" id="expenseDescription" placeholder="e.g., Office Supplies" required>
                 </div>
                 <div class="form-group">
-                    <label for="quantityInStock">Quantity in Stock (Optional)</label>
-                    <input type="number" id="quantityInStock" placeholder="e.g., 50" step="1">
+                    <label for="expenseAmount">Amount</label>
+                    <input type="number" id="expenseAmount" placeholder="0.00" step="0.01" required>
                 </div>
                 <div class="form-group">
-                    <label for="lowStockThreshold">Low Stock Alert At (Optional)</label>
-                    <input type="number" id="lowStockThreshold" placeholder="e.g., 10" step="1">
+                    <label for="expenseDate">Date</label>
+                    <input type="date" id="expenseDate" required>
                 </div>
                 <div class="form-group">
-                    <label for="costPrice">Cost Price (Optional)</label>
-                    <input type="number" id="costPrice" placeholder="0.00" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="sellingPrice">Selling Price</label>
-                    <input type="number" id="sellingPrice" placeholder="0.00" step="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="productCategory">Category</label>
-                    <select id="productCategory" required>
-                    </select>
+                    <label for="expenseCategory">Category</label>
+                    <input type="text" id="expenseCategory" list="category-list" placeholder="e.g., Software, Utilities">
+                    <datalist id="category-list">
+                        <option value="Software"></option>
+                        <option value="Utilities"></option>
+                        <option value="Office Supplies"></option>
+                        <option value="Marketing"></option>
+                        <option value="Travel"></option>
+                        <option value="Other"></option>
+                    </datalist>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary modal-cancel">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Product</button>
+                <button type="submit" class="btn btn-primary">Save Expense</button>
             </div>
         </form>
     </div>
 
-    <script src="js/api.js"></script> 
+    <script src="js/api.js"></script>
     <script src="js/theme.js"></script>
-    <script src="js/products.js"></script>
+    <script src="js/expenses.js"></script>
 </body>
 </html>

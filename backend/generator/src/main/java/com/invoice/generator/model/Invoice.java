@@ -3,6 +3,7 @@ package com.invoice.generator.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +33,7 @@ public class Invoice {
     private LocalDateTime issueDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private Status status;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -45,6 +46,8 @@ public class Invoice {
     @Column(precision = 12, scale = 2)
     private BigDecimal balanceDue;
 
+    private LocalDate lastReminderSentDate;
+
     public enum Status {
         PENDING, PAID, PARTIALLY_PAID, CANCELLED, AWAITING_PAYMENT
     }
@@ -52,8 +55,6 @@ public class Invoice {
     @OneToMany(mappedBy = "invoice", fetch = FetchType.EAGER, cascade = CascadeType.ALL)
     private List<InvoiceItem> invoiceItems = new ArrayList<>();
 
-    // --- THIS LINE IS THE FIX ---
-    // Changed FetchType to EAGER to ensure payments are always loaded with the invoice.
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private List<Payment> payments = new ArrayList<>();
 }

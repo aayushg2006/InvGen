@@ -32,7 +32,8 @@ public class Quote {
     private LocalDateTime issueDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    // --- THIS IS THE FIX ---
+    @Column(nullable = false, length = 20)
     private Status status;
 
     @ManyToOne(fetch = FetchType.LAZY)

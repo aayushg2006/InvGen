@@ -3,6 +3,8 @@ package com.invoice.generator.service;
 import com.invoice.generator.model.Invoice;
 import com.invoice.generator.model.InvoiceItem;
 import com.invoice.generator.model.Payment;
+import com.invoice.generator.model.Quote;
+import com.invoice.generator.model.QuoteItem;
 import com.invoice.generator.model.Shop;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
@@ -47,6 +49,106 @@ public class PdfGenerationService {
         } catch (NumberFormatException e) {
             return new DeviceRgb(59, 130, 246); // Default on error
         }
+    }
+
+    public byte[] generateQuotePdf(Quote quote) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter writer = new PdfWriter(baos);
+        PdfDocument pdf = new PdfDocument(writer);
+        Document document = new Document(pdf, PageSize.A4);
+        document.setMargins(40, 40, 40, 40);
+
+        Shop shop = quote.getShop();
+        Color accentColor = parseHexColor(shop.getInvoiceAccentColor());
+
+        Table header = new Table(UnitValue.createPercentArray(new float[]{1, 1}));
+        header.setWidth(UnitValue.createPercentValue(100));
+        header.setMarginBottom(20);
+
+        Cell shopInfoCell = new Cell().setPadding(0).setBorder(Border.NO_BORDER);
+        if (shop.getLogoPath() != null && !shop.getLogoPath().isEmpty()) {
+            try {
+                String logoFileName = shop.getLogoPath().substring(shop.getLogoPath().lastIndexOf("/") + 1);
+                String fullLogoFilePath = uploadDir + "logos" + File.separator + logoFileName;
+                File logoFile = new File(fullLogoFilePath);
+
+                if (logoFile.exists() && logoFile.canRead()) {
+                    ImageData data = ImageDataFactory.create(fullLogoFilePath);
+                    Image img = new Image(data);
+                    img.setWidth(UnitValue.createPercentValue(30));
+                    img.setMarginBottom(5);
+                    shopInfoCell.add(img);
+                } else {
+                    shopInfoCell.add(createFallbackLogoText());
+                }
+            } catch (Exception e) {
+                shopInfoCell.add(createFallbackLogoText());
+            }
+        } else {
+            shopInfoCell.add(createFallbackLogoText());
+        }
+        shopInfoCell.add(new Paragraph(shop.getShopName()).setBold().setFontSize(14));
+        shopInfoCell.add(new Paragraph(shop.getAddress()).setFontSize(10));
+        shopInfoCell.add(new Paragraph("GSTIN: " + shop.getGstin()).setFontSize(10));
+        header.addCell(shopInfoCell);
+        
+        Cell quoteDetailsCell = new Cell().setPadding(0).setBorder(Border.NO_BORDER).setTextAlignment(TextAlignment.RIGHT);
+        quoteDetailsCell.add(new Paragraph("QUOTE").setBold().setFontSize(24).setMarginBottom(5).setFontColor(accentColor));
+        quoteDetailsCell.add(new Paragraph("Quote #: " + quote.getQuoteNumber()).setFontSize(10));
+        quoteDetailsCell.add(new Paragraph("Date: " + quote.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"))).setFontSize(10).setMarginTop(10));
+        header.addCell(quoteDetailsCell);
+        document.add(header);
+        
+        document.add(new Paragraph("Prepared For:").setBold().setFontSize(10).setMarginBottom(2));
+        document.add(new Paragraph(quote.getCustomer().getName()).setFontSize(10));
+        if (quote.getCustomer().getPhoneNumber() != null && !quote.getCustomer().getPhoneNumber().isEmpty()) {
+            document.add(new Paragraph("Phone: " + quote.getCustomer().getPhoneNumber()).setFontSize(10));
+        }
+        if (quote.getCustomer().getEmail() != null && !quote.getCustomer().getEmail().isEmpty()) {
+            document.add(new Paragraph("Email: " + quote.getCustomer().getEmail()).setFontSize(10));
+        }
+
+        Table itemsTable = new Table(UnitValue.createPercentArray(new float[]{4, 1, 2, 1.5f, 2}));
+        itemsTable.setWidth(UnitValue.createPercentValue(100)).setMarginTop(20);
+        itemsTable.addHeaderCell(createStyledCell("Item", TextAlignment.LEFT, true).setBackgroundColor(accentColor).setFontColor(ColorConstants.WHITE));
+        itemsTable.addHeaderCell(createStyledCell("Qty", TextAlignment.CENTER, true).setBackgroundColor(accentColor).setFontColor(ColorConstants.WHITE));
+        itemsTable.addHeaderCell(createStyledCell("Rate", TextAlignment.RIGHT, true).setBackgroundColor(accentColor).setFontColor(ColorConstants.WHITE));
+        itemsTable.addHeaderCell(createStyledCell("Discount", TextAlignment.RIGHT, true).setBackgroundColor(accentColor).setFontColor(ColorConstants.WHITE));
+        itemsTable.addHeaderCell(createStyledCell("Amount", TextAlignment.RIGHT, true).setBackgroundColor(accentColor).setFontColor(ColorConstants.WHITE));
+
+        for (QuoteItem item : quote.getQuoteItems()) {
+            BigDecimal lineSubtotal = item.getPricePerUnit().multiply(BigDecimal.valueOf(item.getQuantity()));
+            itemsTable.addCell(createStyledCell(item.getProduct().getName(), TextAlignment.LEFT, false));
+            itemsTable.addCell(createStyledCell(String.valueOf(item.getQuantity()), TextAlignment.CENTER, false));
+            itemsTable.addCell(createStyledCell("₹" + String.format("%.2f", item.getProduct().getSellingPrice()), TextAlignment.RIGHT, false));
+            itemsTable.addCell(createStyledCell(String.format("%.2f", item.getDiscountPercentage()) + "%", TextAlignment.RIGHT, false));
+            itemsTable.addCell(createStyledCell("₹" + String.format("%.2f", lineSubtotal), TextAlignment.RIGHT, false));
+        }
+
+        Border topBorder = new SolidBorder(ColorConstants.GRAY, 1f);
+        itemsTable.addCell(new Cell(1, 3).setBorder(Border.NO_BORDER).setBorderTop(topBorder));
+        itemsTable.addCell(createTotalCell("Subtotal:", false).setBorderTop(topBorder));
+        itemsTable.addCell(createTotalCell("₹" + String.format("%.2f", quote.getTotalAmount()), false).setBorderTop(topBorder));
+        
+        itemsTable.addCell(new Cell(1, 3).setBorder(Border.NO_BORDER));
+        itemsTable.addCell(createTotalCell("GST:", false));
+        itemsTable.addCell(createTotalCell("₹" + String.format("%.2f", quote.getTotalGst()), false));
+        
+        itemsTable.addCell(new Cell(1, 3).setBorder(Border.NO_BORDER));
+        itemsTable.addCell(createTotalCell("Grand Total:", true));
+        itemsTable.addCell(createTotalCell("₹" + String.format("%.2f", quote.getTotalAmount().add(quote.getTotalGst())), true));
+        
+        document.add(itemsTable);
+        
+        if (shop.getInvoiceFooter() != null && !shop.getInvoiceFooter().isEmpty()) {
+            document.add(new Paragraph("Notes / Terms")
+                .setBold().setFontSize(10).setMarginTop(30).setMarginBottom(5));
+            document.add(new Paragraph(shop.getInvoiceFooter())
+                .setFontSize(9).setFontColor(ColorConstants.GRAY));
+        }
+
+        document.close();
+        return baos.toByteArray();
     }
 
     public byte[] generateInvoicePdf(Invoice invoice) {
@@ -132,7 +234,6 @@ public class PdfGenerationService {
             itemsTable.addCell(createStyledCell("₹" + String.format("%.2f", lineSubtotal), TextAlignment.RIGHT, false));
         }
 
-        // --- NEW, MORE DETAILED TOTALS SECTION ---
         Border topBorder = new SolidBorder(ColorConstants.GRAY, 1f);
         itemsTable.addCell(new Cell(1, 3).setBorder(Border.NO_BORDER).setBorderTop(topBorder));
         itemsTable.addCell(createTotalCell("Subtotal:", false).setBorderTop(topBorder));
@@ -146,10 +247,9 @@ public class PdfGenerationService {
         itemsTable.addCell(createTotalCell("Grand Total:", true));
         itemsTable.addCell(createTotalCell("₹" + String.format("%.2f", invoice.getTotalAmount().add(invoice.getTotalGst())), true));
         
-        // Loop through payments to show a breakdown
         if (invoice.getPayments() != null && !invoice.getPayments().isEmpty()) {
             for (Payment p : invoice.getPayments()) {
-                if (p.getAmount().compareTo(BigDecimal.ZERO) > 0) { // Only show positive payments
+                if (p.getAmount().compareTo(BigDecimal.ZERO) > 0) {
                     String paymentLabel = "Paid by " + p.getPaymentMethod() + ":";
                     if ("CREDIT APPLIED".equalsIgnoreCase(p.getPaymentMethod())) {
                         paymentLabel = "Credit Applied:";
@@ -161,7 +261,6 @@ public class PdfGenerationService {
             }
         }
         
-        // Show the final balance due
         if (invoice.getBalanceDue() != null) {
             itemsTable.addCell(new Cell(1, 3).setBorder(Border.NO_BORDER));
             itemsTable.addCell(createTotalCell("Balance Due:", true).setFontColor(accentColor));

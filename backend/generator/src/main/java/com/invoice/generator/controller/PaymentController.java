@@ -1,5 +1,6 @@
 package com.invoice.generator.controller;
 
+import com.invoice.generator.dto.PaymentDto;
 import com.invoice.generator.model.Invoice;
 import com.invoice.generator.model.Payment;
 import com.invoice.generator.service.EmailServiceImpl;
@@ -9,6 +10,7 @@ import com.invoice.generator.service.PdfGenerationService;
 import com.invoice.generator.service.RazorpayService;
 import com.razorpay.RazorpayException;
 
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -16,11 +18,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -45,29 +44,67 @@ public class PaymentController {
     @Autowired
     private RazorpayService razorpayService;
 
+    @PostMapping("/razorpay-webhook")
+    public ResponseEntity<String> handleRazorpayWebhook(@RequestBody String payload, @RequestHeader("X-Razorpay-Signature") String signature) {
+        System.out.println("--- Razorpay Webhook Received ---");
+
+        if (!razorpayService.verifyWebhookSignature(payload, signature)) {
+            System.err.println("Webhook signature verification failed.");
+            return new ResponseEntity<>("Invalid signature", HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            JSONObject payloadJson = new JSONObject(payload);
+            String event = payloadJson.getString("event");
+
+            if ("payment_link.paid".equals(event)) {
+                // --- THIS IS THE FIX ---
+                // The 'notes' are inside the 'payment' entity, not the 'payment_link' entity.
+                JSONObject paymentEntity = payloadJson.getJSONObject("payload").getJSONObject("payment").getJSONObject("entity");
+                JSONObject notes = paymentEntity.getJSONObject("notes");
+                
+                long invoiceId = Long.parseLong(notes.getString("invoice_id"));
+                
+                // Get the amount that was actually paid
+                BigDecimal amountPaid = new BigDecimal(paymentEntity.getInt("amount")).divide(new BigDecimal(100));
+                
+                PaymentDto paymentDto = new PaymentDto();
+                paymentDto.setAmount(amountPaid);
+                paymentDto.setPaymentMethod("RAZORPAY_ONLINE");
+                paymentDto.setSendReceipt(true); 
+                
+                invoiceService.recordPayment(invoiceId, paymentDto, null);
+
+                System.out.println("Successfully processed payment for invoice ID: " + invoiceId);
+            }
+
+        } catch (Exception e) {
+            System.err.println("Error processing webhook: " + e.getMessage());
+            e.printStackTrace(); // Print stack trace for better debugging
+        }
+
+        return new ResponseEntity<>("Webhook processed", HttpStatus.OK);
+    }
+
+
     @PostMapping("/create-link/{invoiceId}")
     public ResponseEntity<?> createPaymentLink(@PathVariable Long invoiceId, @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            // 1. Fetch the invoice and validate ownership
             Invoice invoice = invoiceService.getInvoiceById(invoiceId);
             if (!invoice.getShop().getUsers().stream().anyMatch(u -> u.getUsername().equals(userDetails.getUsername()))) {
                 return new ResponseEntity<>("You are not authorized to access this invoice.", HttpStatus.FORBIDDEN);
             }
 
-            // 2. Use getPaymentsEnabled() and a null-safe check
             if (invoice.getShop().getRazorpayFundAccountId() == null || !Boolean.TRUE.equals(invoice.getShop().getPaymentsEnabled())) {
                 return new ResponseEntity<>("This shop has not enabled online payments.", HttpStatus.BAD_REQUEST);
             }
             
-            // 3. Check if there is a balance to be paid
             if (invoice.getBalanceDue() == null || invoice.getBalanceDue().compareTo(BigDecimal.ZERO) <= 0) {
                 return new ResponseEntity<>("This invoice is already fully paid.", HttpStatus.BAD_REQUEST);
             }
 
-            // 4. Call the service to create the link
             String paymentLink = razorpayService.createPaymentLink(invoice);
 
-            // 5. Return the link to the frontend
             return ResponseEntity.ok(Map.of("paymentLink", paymentLink));
 
         } catch (RazorpayException | IOException e) {

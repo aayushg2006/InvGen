@@ -39,12 +39,12 @@ public class InvoiceServiceImpl {
 
     @Transactional
     public Invoice createInvoice(CreateInvoiceDto createInvoiceDto, String username) {
-        // The original method now calls the new, more flexible method with the status from the DTO.
         return createInvoiceWithStatus(createInvoiceDto, username, createInvoiceDto.getStatus());
     }
 
     @Transactional
     public Invoice createInvoiceWithStatus(CreateInvoiceDto createInvoiceDto, String username, Invoice.Status initialStatus) {
+        // ... (this method remains unchanged)
         // Step 1: Validate stock
         for (InvoiceItemDto itemDto : createInvoiceDto.getItems()) {
             Product product = productRepository.findById(itemDto.getProductId())
@@ -104,14 +104,11 @@ public class InvoiceServiceImpl {
         savedInvoice.setTotalAmount(totalAmountWithoutGst);
         savedInvoice.setTotalGst(totalGst);
 
-        // If creating for immediate payment, we don't process payments or credits here.
-        // We just set the initial balance. The webhook will handle the rest.
         if (initialStatus == Invoice.Status.AWAITING_PAYMENT) {
             BigDecimal grandTotal = totalAmountWithoutGst.add(totalGst);
             savedInvoice.setAmountPaid(BigDecimal.ZERO);
             savedInvoice.setBalanceDue(grandTotal);
         } else {
-            // This is the original logic for handling manual payments/credits at creation
             BigDecimal grandTotal = totalAmountWithoutGst.add(totalGst);
             BigDecimal totalPaid = BigDecimal.ZERO;
             if (createInvoiceDto.isApplyCredit()) {
@@ -174,15 +171,22 @@ public class InvoiceServiceImpl {
     
     @Transactional
     public Invoice recordPayment(Long invoiceId, PaymentDto paymentDto, String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found with id: " + invoiceId));
-
-        if (!invoice.getShop().getId().equals(user.getShop().getId())) {
-            throw new SecurityException("User not authorized to record payment for this invoice.");
+        
+        if (username != null) {
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+            if (!invoice.getShop().getId().equals(user.getShop().getId())) {
+                throw new SecurityException("User not authorized to record payment for this invoice.");
+            }
         }
         
+        if (invoice.getStatus() == Invoice.Status.AWAITING_PAYMENT || invoice.getStatus() == Invoice.Status.PENDING) {
+             invoice.setBalanceDue(invoice.getTotalAmount().add(invoice.getTotalGst()));
+             invoice.setAmountPaid(BigDecimal.ZERO);
+        }
+
         Payment newPayment = new Payment();
         newPayment.setAmount(paymentDto.getAmount());
         newPayment.setPaymentMethod(paymentDto.getPaymentMethod());
@@ -190,7 +194,7 @@ public class InvoiceServiceImpl {
         newPayment.setInvoice(invoice);
         Payment savedPayment = paymentRepository.save(newPayment);
 
-        BigDecimal currentBalanceDue = invoice.getBalanceDue() != null ? invoice.getBalanceDue() : invoice.getTotalAmount().add(invoice.getTotalGst());
+        BigDecimal currentBalanceDue = invoice.getBalanceDue();
         BigDecimal overpaymentAmount = paymentDto.getAmount().subtract(currentBalanceDue);
 
         if (overpaymentAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -232,11 +236,20 @@ public class InvoiceServiceImpl {
 
         Invoice updatedInvoice = invoiceRepository.save(invoice);
 
+        // --- THIS IS THE FIX ---
+        // We now call the new combined email method regardless of how the payment was made.
         if (paymentDto.isSendReceipt()) {
             try {
-                emailService.sendPaymentReceiptEmail(user.getUsername(), savedPayment);
+                String replyToEmail = invoice.getShop().getUsers().stream()
+                        .map(User::getUsername)
+                        .findFirst()
+                        .orElse("noreply@invgen.com");
+                
+                // This single method sends both the invoice and the receipt
+                emailService.sendPostPaymentEmail(replyToEmail, savedPayment);
+
             } catch (IOException e) {
-                System.err.println("Failed to send payment receipt email for payment ID: " + savedPayment.getId() + " - " + e.getMessage());
+                System.err.println("Failed to send post-payment email for payment ID: " + savedPayment.getId() + " - " + e.getMessage());
             }
         }
 
@@ -244,6 +257,7 @@ public class InvoiceServiceImpl {
     }
     
     private void deductStockFromInvoice(Invoice invoice) {
+        // ... (this method remains unchanged)
         for (InvoiceItem item : invoice.getInvoiceItems()) {
             Product product = item.getProduct();
             if (product.getQuantityInStock() != null) {
@@ -255,6 +269,7 @@ public class InvoiceServiceImpl {
     }
 
     public List<InvoiceSummaryDto> getInvoicesForUser(String username) {
+        // ... (this method remains unchanged)
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         List<Invoice> invoices = invoiceRepository.findAllByShopOrderByIssueDateDesc(user.getShop());
         return invoices.stream().map(this::mapInvoiceToSummaryDto).collect(Collectors.toList());
@@ -262,6 +277,7 @@ public class InvoiceServiceImpl {
 
     @Transactional
     public void updateInvoiceStatus(Long invoiceId, Invoice.Status status, String username) {
+        // ... (this method remains unchanged)
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         Invoice invoice = invoiceRepository.findById(invoiceId).orElseThrow(() -> new RuntimeException("Invoice not found"));
         if (!invoice.getShop().getId().equals(user.getShop().getId())) {
@@ -279,13 +295,17 @@ public class InvoiceServiceImpl {
             invoice.setAmountPaid(grandTotal);
             invoice.setBalanceDue(BigDecimal.ZERO);
         } else if (status == Invoice.Status.PENDING || status == Invoice.Status.CANCELLED) {
-            invoice.setAmountPaid(BigDecimal.ZERO);
-            invoice.setBalanceDue(grandTotal);
+            BigDecimal totalPaid = paymentRepository.findAllByInvoice(invoice).stream()
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            invoice.setAmountPaid(totalPaid);
+            invoice.setBalanceDue(grandTotal.subtract(totalPaid));
         }
         invoiceRepository.save(invoice);
     }
 
     public InvoiceDetailDto getInvoiceDetails(Long invoiceId, String username) {
+        // ... (this method remains unchanged)
         User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         Invoice invoice = invoiceRepository.findById(invoiceId).orElseThrow(() -> new RuntimeException("Invoice not found"));
         if (!invoice.getShop().getId().equals(user.getShop().getId())) {
@@ -295,11 +315,13 @@ public class InvoiceServiceImpl {
     }
 
     public Invoice getInvoiceById(Long invoiceId) {
+        // ... (this method remains unchanged)
         return invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Invoice not found with id: " + invoiceId));
     }
 
     private InvoiceSummaryDto mapInvoiceToSummaryDto(Invoice invoice) {
+        // ... (this method remains unchanged)
         InvoiceSummaryDto dto = new InvoiceSummaryDto();
         dto.setId(invoice.getId());
         dto.setInvoiceNumber(invoice.getInvoiceNumber());
@@ -313,6 +335,7 @@ public class InvoiceServiceImpl {
     }
     
     private Customer getOrCreateCustomer(CreateInvoiceDto dto, Shop shop) {
+        // ... (this method remains unchanged)
         if (dto.getCustomerId() != null) {
             return customerRepository.findById(dto.getCustomerId()).orElseThrow(() -> new RuntimeException("Customer not found"));
         } else if (dto.getNewCustomerName() != null && !dto.getNewCustomerName().isEmpty()) {
@@ -328,6 +351,7 @@ public class InvoiceServiceImpl {
     }
     
     private InvoiceDetailDto mapInvoiceToDetailDto(Invoice invoice) {
+        // ... (this method remains unchanged)
         InvoiceDetailDto dto = new InvoiceDetailDto();
         dto.setInvoiceNumber(invoice.getInvoiceNumber());
         dto.setIssueDate(invoice.getIssueDate());
@@ -369,6 +393,7 @@ public class InvoiceServiceImpl {
     }
 
     private InvoiceItemDetailDto mapInvoiceItemToDetailDto(InvoiceItem item) {
+        // ... (this method remains unchanged)
         InvoiceItemDetailDto dto = new InvoiceItemDetailDto();
         dto.setProductName(item.getProduct().getName());
         dto.setQuantity(item.getQuantity());

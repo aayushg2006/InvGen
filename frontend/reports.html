@@ -22,14 +22,15 @@
             <ul class="sidebar-nav">
                 <li><a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
                 <li><a href="products.html"><i class="fas fa-box"></i> Products</a></li>
+                 <li><a href="expenses.html"><i class="fas fa-wallet"></i> Expenses</a></li>
                 <li><a href="recurring-invoices.html"><i class="fas fa-sync-alt"></i> Recurring</a></li>
                 <li><a href="quote-create.html"><i class="fas fa-plus"></i> Create Quote</a></li>
                 <li><a href="invoice-create.html"><i class="fas fa-plus"></i> Create Invoice</a></li>
                 <li><a href="quotes-list.html"><i class="fas fa-list-alt"></i> View Quotes</a></li>
                 <li><a href="invoices-list.html"><i class="fas fa-list"></i> View Invoices</a></li>
                 <li><a href="customers.html"><i class="fas fa-users"></i> Customers</a></li>
-                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
                 <li class="active"><a href="reports.html"><i class="fas fa-chart-pie"></i> Reports</a></li>
+                <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
             </ul>
             <div class="sidebar-footer">
                 <div class="theme-switcher">
@@ -45,20 +46,55 @@
 
         <main class="main-content">
             <h1 class="main-title">Reports</h1>
-            
+
             <div class="card">
-                <div class="card-header">
-                    <h2>Revenue by Payment Method</h2>
-                </div>
                 <div class="card-body">
                     <div class="report-filters">
+                        <label for="startDate">From:</label>
                         <input type="date" id="startDate">
+                        <label for="endDate">To:</label>
                         <input type="date" id="endDate">
-                        <button id="generateReportBtn" class="btn btn-primary">Generate</button>
+                        <button id="generateReportBtn" class="btn btn-primary">Generate Reports</button>
                     </div>
-                    <div style="width: 50%; margin: 20px auto;">
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 30px;">
+                <div class="card-header"><h2>Profit & Loss Statement</h2></div>
+                <div class="card-body" id="pnl-section">
+                    <p>Select a date range and click "Generate" to view the statement.</p>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap;">
+                <div class="card" style="flex: 1; min-width: 400px;">
+                    <div class="card-header"><h2>Revenue by Payment Method</h2></div>
+                    <div class="card-body">
                         <canvas id="paymentMethodChart"></canvas>
                     </div>
+                </div>
+
+                <div class="card" style="flex: 1; min-width: 400px;">
+                    <div class="card-header"><h2>Sales By Product</h2></div>
+                    <div class="card-body">
+                        <canvas id="salesByProductChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 30px;">
+                <div class="card-header"><h2>Revenue By Customer</h2></div>
+                <div class="card-body">
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th>Customer Name</th>
+                                <th>Total Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody id="revenueByCustomerBody">
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </main>

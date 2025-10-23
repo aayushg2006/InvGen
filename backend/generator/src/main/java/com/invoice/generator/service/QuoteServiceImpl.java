@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -34,6 +35,8 @@ public class QuoteServiceImpl {
     private UserRepository userRepository;
     @Autowired
     private CustomerRepository customerRepository;
+    @Autowired
+    private EmailServiceImpl emailService;
 
     @Transactional
     public Quote createQuote(CreateQuoteDto createQuoteDto, String username) {
@@ -47,15 +50,12 @@ public class QuoteServiceImpl {
         quote.setShop(shop);
         quote.setCustomer(customer);
         quote.setIssueDate(LocalDateTime.now());
-        quote.setStatus(Quote.Status.DRAFT);
+        quote.setStatus(Quote.Status.SENT);
         quote.setQuoteNumber("QUO-" + shop.getId() + "-" + System.currentTimeMillis());
 
-        // --- THIS IS THE FIX ---
-        // Initialize totals to zero before the first save
         quote.setTotalAmount(BigDecimal.ZERO);
         quote.setTotalGst(BigDecimal.ZERO);
-        // --- END OF FIX ---
-
+        
         Quote savedQuote = quoteRepository.save(quote);
 
         BigDecimal totalAmountWithoutGst = BigDecimal.ZERO;
@@ -105,7 +105,20 @@ public class QuoteServiceImpl {
         savedQuote.setTotalAmount(totalAmountWithoutGst);
         savedQuote.setTotalGst(totalGst);
 
-        return quoteRepository.save(savedQuote);
+        Quote finalQuote = quoteRepository.save(savedQuote);
+
+        try {
+            if (finalQuote.getCustomer() != null && finalQuote.getCustomer().getEmail() != null && !finalQuote.getCustomer().getEmail().isEmpty()) {
+                 System.out.println("Sending quote email to: " + finalQuote.getCustomer().getEmail());
+                 emailService.sendQuoteEmail(username, finalQuote);
+            } else {
+                 System.out.println("Quote created, but not sending email because customer email is missing.");
+            }
+        } catch (IOException e) {
+            System.err.println("Quote " + finalQuote.getId() + " was created, but failed to send email: " + e.getMessage());
+        }
+
+        return finalQuote;
     }
 
     public List<QuoteSummaryDto> getQuotesForUser(String username) {
