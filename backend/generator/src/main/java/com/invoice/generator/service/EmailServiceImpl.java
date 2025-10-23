@@ -1,8 +1,7 @@
 package com.invoice.generator.service;
 
 import com.invoice.generator.model.Invoice;
-import com.invoice.generator.model.Payment; // <-- IMPORT ADDED
-import com.invoice.generator.model.Quote;
+import com.invoice.generator.model.Payment;
 import com.sendgrid.Method;
 import com.sendgrid.Request;
 import com.sendgrid.Response;
@@ -16,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.Base64;
 
 @Service
@@ -24,14 +24,17 @@ public class EmailServiceImpl {
     @Autowired
     private PdfGenerationService pdfGenerationService;
 
+    @Autowired
+    private RazorpayService razorpayService; // Injected RazorpayService
+
     @Value("${sendgrid.api.key}")
     private String sendGridApiKey;
 
-    // IMPORTANT: This should be the "From Email Address" you verified in SendGrid.
     private final String FROM_EMAIL = "aayushgcode754@gmail.com";
 
     /**
-     * Sends an invoice email.
+     * Sends an invoice email. If payments are enabled and there is a balance due,
+     * it automatically generates and includes a "Pay Now" button in the email.
      * @param userEmail The email of the logged-in user (for the Reply-To header).
      * @param invoice The invoice object.
      * @param recipientEmail The email of the customer.
@@ -41,13 +44,35 @@ public class EmailServiceImpl {
     public void sendInvoiceEmail(String userEmail, Invoice invoice, String recipientEmail, String customMessage) throws IOException {
         byte[] pdfBytes = pdfGenerationService.generateInvoicePdf(invoice);
         String subject = "Invoice " + invoice.getInvoiceNumber() + " from " + invoice.getShop().getShopName();
+
+        String paymentLink = null;
+        // Check if payments are enabled for the shop AND if there's a balance due
+        if (Boolean.TRUE.equals(invoice.getShop().getPaymentsEnabled()) &&
+            invoice.getBalanceDue() != null &&
+            invoice.getBalanceDue().compareTo(BigDecimal.ZERO) > 0) {
+            try {
+                // If conditions are met, create a payment link
+                paymentLink = razorpayService.createPaymentLink(invoice);
+            } catch (Exception e) {
+                System.err.println("Failed to create payment link for email for invoice " + invoice.getInvoiceNumber() + ": " + e.getMessage());
+                // If it fails, we'll just send the email without the link.
+            }
+        }
+
         String body = (customMessage != null && !customMessage.isEmpty()) ? customMessage :
                 "Hello, <br><br>Please find your invoice attached.<br><br>Thank you,<br>" + invoice.getShop().getShopName();
+
+        // Only if a paymentLink was successfully created, add the button to the email body
+        if (paymentLink != null) {
+            String payButtonHtml = "<br><br><a href=\"" + paymentLink + "\" " +
+                                 "style=\"background-color:#4F46E5; color:#ffffff; padding:12px 24px; text-decoration:none; border-radius:8px; font-family:sans-serif; font-size:16px; font-weight:bold;\">" +
+                                 "Pay Now</a>";
+            body += payButtonHtml;
+        }
 
         sendEmail(recipientEmail, userEmail, subject, body, "Invoice-" + invoice.getInvoiceNumber() + ".pdf", pdfBytes);
     }
 
-    // --- NEW METHOD FOR SENDING PAYMENT RECEIPTS ---
     public void sendPaymentReceiptEmail(String userEmail, Payment payment) throws IOException {
         Invoice invoice = payment.getInvoice();
         byte[] pdfBytes = pdfGenerationService.generatePaymentReceiptPdf(payment);
@@ -57,17 +82,14 @@ public class EmailServiceImpl {
         sendEmail(invoice.getCustomer().getEmail(), userEmail, subject, body, "Receipt-PAY-" + payment.getId() + ".pdf", pdfBytes);
     }
 
-
     private void sendEmail(String to, String replyTo, String subject, String body, String attachmentFileName, byte[] attachmentBytes) throws IOException {
         Email fromEmail = new Email(FROM_EMAIL);
         Email toEmail = new Email(to);
         Content content = new Content("text/html", body);
         Mail mail = new Mail(fromEmail, subject, toEmail, content);
         
-        // This is the key part for our strategy: set the user's email as the Reply-To address.
         mail.setReplyTo(new Email(replyTo));
 
-        // Add the PDF attachment
         Attachments attachments = new Attachments();
         String base64Content = Base64.getEncoder().encodeToString(attachmentBytes);
         attachments.setContent(base64Content);
@@ -84,7 +106,6 @@ public class EmailServiceImpl {
             request.setBody(mail.build());
             Response response = sg.api(request);
             
-            // Log the result for debugging
             System.out.println("Email sent to " + to + "! Status Code: " + response.getStatusCode());
             
         } catch (IOException ex) {

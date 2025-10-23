@@ -28,7 +28,7 @@
     <li><a href="quotes-list.html"><i class="fas fa-list-alt"></i> View Quotes</a></li>
     <li><a href="invoices-list.html"><i class="fas fa-list"></i> View Invoices</a></li>
     <li><a href="customers.html"><i class="fas fa-users"></i> Customers</a></li>
-    <li><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
+    <li class="active"><a href="settings.html"><i class="fas fa-cog"></i> Settings</a></li>
     <li><a href="reports.html"><i class="fas fa-chart-pie"></i> Reports</a></li>
 </ul>
             <div class="sidebar-footer">
@@ -80,15 +80,38 @@
                         </div>
                         <div class="form-row">
                             <label for="invoiceAccentColor">Accent Color</label>
-                            <input type="color" id="invoiceAccentColor" class="color-picker">
+                            <input type="color" id="invoiceAccentColor" class="color-picker" value="#3B82F6">
                         </div>
                         <div class="form-row">
                             <label for="invoiceFooter">Invoice Footer</label>
                             <textarea id="invoiceFooter" rows="4" placeholder="Add notes, terms, or bank details here..."></textarea>
                         </div>
-
                     </div>
 
+                    <div class="settings-section">
+                        <h3>Payment Gateway</h3>
+                        <div class="form-row form-row-toggle">
+                            <label for="paymentsEnabled">Enable Online Payments</label>
+                            <label class="switch" style="margin-top: 5px;">
+                                <input type="checkbox" id="paymentsEnabled">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div id="bank-details-form" style="display: none;">
+                            <div class="form-row">
+                                <label for="beneficiaryName">Account Holder Name</label>
+                                <input type="text" id="beneficiaryName" placeholder="Enter the name on the bank account">
+                            </div>
+                            <div class="form-row">
+                                <label for="bankAccountNumber">Bank Account Number</label>
+                                <input type="text" id="bankAccountNumber" placeholder="Enter your bank account number">
+                            </div>
+                            <div class="form-row">
+                                <label for="bankIfscCode">IFSC Code</label>
+                                <input type="text" id="bankIfscCode" placeholder="Enter the bank's IFSC code">
+                            </div>
+                        </div>
+                    </div>
                     <div class="settings-actions">
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Changes</button>
                     </div>

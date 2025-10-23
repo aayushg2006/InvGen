@@ -39,16 +39,22 @@ public class InvoiceServiceImpl {
 
     @Transactional
     public Invoice createInvoice(CreateInvoiceDto createInvoiceDto, String username) {
-        // Step 1: Validate stock before doing anything else.
+        // The original method now calls the new, more flexible method with the status from the DTO.
+        return createInvoiceWithStatus(createInvoiceDto, username, createInvoiceDto.getStatus());
+    }
+
+    @Transactional
+    public Invoice createInvoiceWithStatus(CreateInvoiceDto createInvoiceDto, String username, Invoice.Status initialStatus) {
+        // Step 1: Validate stock
         for (InvoiceItemDto itemDto : createInvoiceDto.getItems()) {
             Product product = productRepository.findById(itemDto.getProductId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                    .orElseThrow(() -> new RuntimeException("Product not found"));
             if (product.getQuantityInStock() != null && product.getQuantityInStock() < itemDto.getQuantity()) {
                 throw new RuntimeException("Not enough stock for product: " + product.getName() + ". Available: " + product.getQuantityInStock());
             }
         }
         
-        // Step 2: Proceed with invoice creation if stock is sufficient.
+        // Step 2: Proceed with invoice creation
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         Shop shop = user.getShop();
@@ -59,12 +65,11 @@ public class InvoiceServiceImpl {
         invoice.setCustomer(customer);
         invoice.setIssueDate(LocalDateTime.now());
         invoice.setInvoiceNumber("INV-" + shop.getId() + "-" + System.currentTimeMillis());
-        invoice.setStatus(Invoice.Status.PENDING);
+        invoice.setStatus(initialStatus); // Use the provided initial status
         invoice.setTotalAmount(BigDecimal.ZERO);
         invoice.setTotalGst(BigDecimal.ZERO);
         Invoice savedInvoice = invoiceRepository.save(invoice);
 
-        // ... (rest of the item processing logic remains the same)
         BigDecimal totalAmountWithoutGst = BigDecimal.ZERO;
         BigDecimal totalGst = BigDecimal.ZERO;
         List<InvoiceItem> invoiceItems = new ArrayList<>();
@@ -99,70 +104,71 @@ public class InvoiceServiceImpl {
         savedInvoice.setTotalAmount(totalAmountWithoutGst);
         savedInvoice.setTotalGst(totalGst);
 
-        BigDecimal grandTotal = totalAmountWithoutGst.add(totalGst);
-        BigDecimal totalPaid = BigDecimal.ZERO;
-        BigDecimal creditApplied = BigDecimal.ZERO;
+        // If creating for immediate payment, we don't process payments or credits here.
+        // We just set the initial balance. The webhook will handle the rest.
+        if (initialStatus == Invoice.Status.AWAITING_PAYMENT) {
+            BigDecimal grandTotal = totalAmountWithoutGst.add(totalGst);
+            savedInvoice.setAmountPaid(BigDecimal.ZERO);
+            savedInvoice.setBalanceDue(grandTotal);
+        } else {
+            // This is the original logic for handling manual payments/credits at creation
+            BigDecimal grandTotal = totalAmountWithoutGst.add(totalGst);
+            BigDecimal totalPaid = BigDecimal.ZERO;
+            if (createInvoiceDto.isApplyCredit()) {
+                Optional<CustomerCredit> creditOpt = customerCreditRepository.findByCustomerId(customer.getId());
+                if (creditOpt.isPresent()) {
+                    CustomerCredit credit = creditOpt.get();
+                    if (credit.getBalance().compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal amountToApply = credit.getBalance().min(grandTotal);
+                        totalPaid = totalPaid.add(amountToApply);
 
-        if (createInvoiceDto.isApplyCredit()) {
-            Optional<CustomerCredit> creditOpt = customerCreditRepository.findByCustomerId(customer.getId());
-            if (creditOpt.isPresent()) {
-                CustomerCredit credit = creditOpt.get();
-                if (credit.getBalance().compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal amountToApply = credit.getBalance().min(grandTotal);
-                    creditApplied = creditApplied.add(amountToApply);
+                        Payment creditPayment = new Payment();
+                        creditPayment.setAmount(amountToApply);
+                        creditPayment.setPaymentDate(LocalDateTime.now());
+                        creditPayment.setPaymentMethod("CREDIT APPLIED");
+                        creditPayment.setInvoice(savedInvoice);
+                        paymentRepository.save(creditPayment);
 
-                    Payment creditPayment = new Payment();
-                    creditPayment.setAmount(amountToApply);
-                    creditPayment.setPaymentDate(LocalDateTime.now());
-                    creditPayment.setPaymentMethod("CREDIT APPLIED");
-                    creditPayment.setInvoice(savedInvoice);
-                    paymentRepository.save(creditPayment);
+                        credit.setBalance(credit.getBalance().subtract(amountToApply));
+                        customerCreditRepository.save(credit);
+                    }
+                }
+            }
 
-                    credit.setBalance(credit.getBalance().subtract(amountToApply));
-                    customerCreditRepository.save(credit);
+            if (createInvoiceDto.getStatus() == Invoice.Status.PAID) {
+                BigDecimal remainingToPay = grandTotal.subtract(totalPaid);
+                if (remainingToPay.compareTo(BigDecimal.ZERO) > 0) {
+                    Payment mainPayment = new Payment();
+                    mainPayment.setAmount(remainingToPay);
+                    mainPayment.setPaymentDate(LocalDateTime.now());
+                    mainPayment.setPaymentMethod(createInvoiceDto.getPaymentMethod());
+                    mainPayment.setInvoice(savedInvoice);
+                    paymentRepository.save(mainPayment);
+                }
+                savedInvoice.setAmountPaid(grandTotal);
+                savedInvoice.setBalanceDue(BigDecimal.ZERO);
+                deductStockFromInvoice(savedInvoice);
+            } else if (createInvoiceDto.getStatus() == Invoice.Status.PARTIALLY_PAID) {
+                if (createInvoiceDto.getInitialAmountPaid() != null && createInvoiceDto.getInitialAmountPaid().compareTo(BigDecimal.ZERO) > 0) {
+                    Payment initialPayment = new Payment();
+                    initialPayment.setAmount(createInvoiceDto.getInitialAmountPaid());
+                    initialPayment.setPaymentDate(LocalDateTime.now());
+                    initialPayment.setPaymentMethod(createInvoiceDto.getPaymentMethod());
+                    initialPayment.setInvoice(savedInvoice);
+                    paymentRepository.save(initialPayment);
+                    totalPaid = totalPaid.add(createInvoiceDto.getInitialAmountPaid());
+                }
+                savedInvoice.setAmountPaid(totalPaid);
+                savedInvoice.setBalanceDue(grandTotal.subtract(totalPaid));
+            } else { // PENDING
+                savedInvoice.setAmountPaid(totalPaid);
+                savedInvoice.setBalanceDue(grandTotal.subtract(totalPaid));
+                if (totalPaid.compareTo(BigDecimal.ZERO) > 0) {
+                    savedInvoice.setStatus(Invoice.Status.PARTIALLY_PAID);
                 }
             }
         }
-        totalPaid = totalPaid.add(creditApplied);
-
-        if (createInvoiceDto.getStatus() == Invoice.Status.PAID) {
-            BigDecimal remainingToPay = grandTotal.subtract(totalPaid);
-            if (remainingToPay.compareTo(BigDecimal.ZERO) > 0) {
-                Payment mainPayment = new Payment();
-                mainPayment.setAmount(remainingToPay);
-                mainPayment.setPaymentDate(LocalDateTime.now());
-                mainPayment.setPaymentMethod(createInvoiceDto.getPaymentMethod());
-                mainPayment.setInvoice(savedInvoice);
-                paymentRepository.save(mainPayment);
-            }
-            savedInvoice.setAmountPaid(grandTotal);
-            savedInvoice.setBalanceDue(BigDecimal.ZERO);
-            savedInvoice.setStatus(Invoice.Status.PAID);
-            
-            // Call centralized stock deduction method
-            deductStockFromInvoice(savedInvoice);
-
-        } else if (createInvoiceDto.getStatus() == Invoice.Status.PARTIALLY_PAID) {
-            if (createInvoiceDto.getInitialAmountPaid() != null && createInvoiceDto.getInitialAmountPaid().compareTo(BigDecimal.ZERO) > 0) {
-                Payment initialPayment = new Payment();
-                initialPayment.setAmount(createInvoiceDto.getInitialAmountPaid());
-                initialPayment.setPaymentDate(LocalDateTime.now());
-                initialPayment.setPaymentMethod(createInvoiceDto.getPaymentMethod());
-                initialPayment.setInvoice(savedInvoice);
-                paymentRepository.save(initialPayment);
-                totalPaid = totalPaid.add(createInvoiceDto.getInitialAmountPaid());
-            }
-            savedInvoice.setAmountPaid(totalPaid);
-            savedInvoice.setBalanceDue(grandTotal.subtract(totalPaid));
-            savedInvoice.setStatus(Invoice.Status.PARTIALLY_PAID);
-
-        } else { // PENDING
-            savedInvoice.setAmountPaid(totalPaid);
-            BigDecimal balanceDue = grandTotal.subtract(totalPaid);
-            savedInvoice.setBalanceDue(balanceDue);
-            savedInvoice.setStatus(totalPaid.compareTo(BigDecimal.ZERO) > 0 ? Invoice.Status.PARTIALLY_PAID : Invoice.Status.PENDING);
-        }
-
+        
         return invoiceRepository.save(savedInvoice);
     }
     
@@ -219,10 +225,7 @@ public class InvoiceServiceImpl {
         if (newBalance.compareTo(BigDecimal.ZERO) <= 0) {
             invoice.setStatus(Invoice.Status.PAID);
             invoice.setBalanceDue(BigDecimal.ZERO);
-            
-            // Call centralized stock deduction method
             deductStockFromInvoice(invoice);
-
         } else {
             invoice.setStatus(Invoice.Status.PARTIALLY_PAID);
         }
@@ -240,7 +243,6 @@ public class InvoiceServiceImpl {
         return updatedInvoice;
     }
     
-    // Centralized private method for stock deduction
     private void deductStockFromInvoice(Invoice invoice) {
         for (InvoiceItem item : invoice.getInvoiceItems()) {
             Product product = item.getProduct();
@@ -266,7 +268,6 @@ public class InvoiceServiceImpl {
             throw new SecurityException("User not authorized to update this invoice.");
         }
         
-        // Check if status is changing TO paid FROM something else
         if (invoice.getStatus() != Invoice.Status.PAID && status == Invoice.Status.PAID) {
             deductStockFromInvoice(invoice);
         }

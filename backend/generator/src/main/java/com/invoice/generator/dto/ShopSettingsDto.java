@@ -8,9 +8,13 @@ public class ShopSettingsDto {
     private String gstin;
     private String address;
     private String logoPath;
-
-    // --- ADD THESE NEW FIELDS ---
     private String invoiceAccentColor;
     private String invoiceTitle;
     private String invoiceFooter;
+
+    // --- NEW FIELDS FOR RAZORPAY ROUTE ---
+    private String bankAccountNumber;
+    private String bankIfscCode;
+    private String beneficiaryName;
+    private Boolean paymentsEnabled;
 }

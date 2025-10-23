@@ -6,23 +6,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const settingsForm = document.getElementById('settingsForm');
     const logoUploadInput = document.getElementById('logoUpload');
     const logoPreview = document.getElementById('logoPreview');
-    // --- New form elements ---
     const invoiceTitleInput = document.getElementById('invoiceTitle');
     const invoiceAccentColorInput = document.getElementById('invoiceAccentColor');
     const invoiceFooterTextarea = document.getElementById('invoiceFooter');
-    
+
+    // --- NEW PAYMENT GATEWAY ELEMENTS ---
+    const paymentsEnabledToggle = document.getElementById('paymentsEnabled');
+    const bankDetailsForm = document.getElementById('bank-details-form');
+    const beneficiaryNameInput = document.getElementById('beneficiaryName');
+    const bankAccountNumberInput = document.getElementById('bankAccountNumber');
+    const bankIfscCodeInput = document.getElementById('bankIfscCode');
+
     let selectedLogoFile = null;
 
     // --- Function to load current shop settings ---
     async function loadSettings() {
         try {
             const shop = await fetchWithAuth('/settings');
-            // --- Populate all fields ---
+            
+            // Populate all existing fields
             shopNameInput.value = shop.shopName || '';
             gstinInput.value = shop.gstin || '';
             addressTextarea.value = shop.address || '';
-            
-            // --- Populate new fields (with defaults) ---
             invoiceTitleInput.value = shop.invoiceTitle || 'INVOICE';
             invoiceAccentColorInput.value = shop.invoiceAccentColor || '#3B82F6';
             invoiceFooterTextarea.value = shop.invoiceFooter || '';
@@ -30,10 +35,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (shop.logoPath) {
                 logoPreview.src = `http://localhost:8080${shop.logoPath}?t=${new Date().getTime()}`;
             }
+
+            // --- NEW: Populate payment gateway fields ---
+            paymentsEnabledToggle.checked = shop.paymentsEnabled;
+            beneficiaryNameInput.value = shop.beneficiaryName || '';
+            bankAccountNumberInput.value = shop.bankAccountNumber || '';
+            bankIfscCodeInput.value = shop.bankIfscCode || '';
+            
+            // Show or hide the bank details form based on the toggle's state
+            toggleBankDetailsForm();
+
         } catch (error) {
             // Error is handled by the fetchWithAuth function
         }
     }
+
+    // --- NEW: Function to show/hide bank details form ---
+    function toggleBankDetailsForm() {
+        if (paymentsEnabledToggle.checked) {
+            bankDetailsForm.style.display = 'block';
+        } else {
+            bankDetailsForm.style.display = 'none';
+        }
+    }
+
+    // --- Event listener for the payments toggle ---
+    paymentsEnabledToggle.addEventListener('change', toggleBankDetailsForm);
+
 
     // --- Event listener for new logo file selection ---
     logoUploadInput.addEventListener('change', (event) => {
@@ -71,15 +99,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        // --- Step 2: Save the rest of the settings (including new ones) ---
+        // --- Step 2: Save the rest of the settings (including payment details) ---
         const settingsData = {
             shopName: shopNameInput.value,
             gstin: gstinInput.value,
             address: addressTextarea.value,
-            // --- Add new fields to the payload ---
             invoiceTitle: invoiceTitleInput.value,
             invoiceAccentColor: invoiceAccentColorInput.value,
             invoiceFooter: invoiceFooterTextarea.value,
+            
+            // --- NEW: Add payment fields to the payload ---
+            paymentsEnabled: paymentsEnabledToggle.checked,
+            beneficiaryName: beneficiaryNameInput.value,
+            bankAccountNumber: bankAccountNumberInput.value,
+            bankIfscCode: bankIfscCodeInput.value,
         };
 
         try {

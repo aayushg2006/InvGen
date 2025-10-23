@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    // --- Existing Elements ---
     const itemsTableBody = document.getElementById('invoice-items-body');
     const itemTemplate = document.getElementById('invoice-item-template');
     const addItemBtn = document.getElementById('addItemBtn');
@@ -8,20 +9,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const invoiceForm = document.getElementById('invoiceForm');
     const initialPaymentGroup = document.getElementById('initial-payment-group');
     const initialAmountPaidInput = document.getElementById('initialAmountPaid');
-    
     const creditAlert = document.getElementById('credit-balance-alert');
     const creditBalanceAmount = document.getElementById('credit-balance-amount');
     const applyCreditCheckbox = document.getElementById('applyCredit');
-
     const creditAppliedRow = document.getElementById('credit-applied-row');
     const creditAppliedSpan = document.getElementById('credit-applied');
     const balanceDueRow = document.getElementById('balance-due-row');
     const balanceDueSpan = document.getElementById('balance-due');
-
-    // --- References to the new buttons ---
-    const saveAndGenerateBtn = document.getElementById('saveAndGenerateBtn');
+    const paymentMethodSelect = document.getElementById('paymentMethod');
+    const saveAndGenerateBtn = document.querySelector('button[type="submit"]');
     const saveAndEmailBtn = document.getElementById('saveAndEmailBtn');
-    
+
+    // --- NEW QR Code Modal Elements ---
+    const qrModal = document.getElementById('qrModal');
+    const qrCodeContainer = document.getElementById('qrcode');
+    const qrStatusMessage = document.getElementById('qr-status-message');
+    const qrCloseBtn = qrModal.querySelector('.modal-close');
+    let qrCodeInstance = null;
+    let paymentCheckInterval = null;
+
     let products = [];
     let customers = [];
     let currentCustomerCredit = 0;
@@ -68,9 +74,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     customerInput.addEventListener('change', checkCustomerCredit);
     applyCreditCheckbox.addEventListener('change', calculateTotals);
-    statusSelect.addEventListener('change', () => {
-        initialPaymentGroup.style.display = statusSelect.value === 'PARTIALLY_PAID' ? 'block' : 'none';
-    });
 
     function addNewItem() {
         const newRow = itemTemplate.content.cloneNode(true);
@@ -183,11 +186,88 @@ document.addEventListener('DOMContentLoaded', async () => {
         return invoiceData;
     };
 
+    // --- NEW: Modal Control for QR Code ---
+    const showQrModal = (paymentLink) => {
+        qrCodeContainer.innerHTML = ''; // Clear previous QR code
+        qrCodeInstance = new QRCode(qrCodeContainer, {
+            text: paymentLink,
+            width: 256,
+            height: 256,
+        });
+        qrStatusMessage.textContent = 'Waiting for payment confirmation...';
+        qrStatusMessage.style.color = 'inherit';
+        qrModal.classList.add('active');
+    };
+
+    const hideQrModal = () => {
+        if (paymentCheckInterval) {
+            clearInterval(paymentCheckInterval);
+        }
+        qrModal.classList.remove('active');
+    };
+
+    qrCloseBtn.addEventListener('click', hideQrModal);
+
+    // --- NEW: Function to check invoice status ---
+    const startPaymentStatusCheck = (invoiceId) => {
+        paymentCheckInterval = setInterval(async () => {
+            try {
+                const invoice = await fetchWithAuth(`/invoices/${invoiceId}`);
+                if (invoice.status === 'PAID' || invoice.status === 'PARTIALLY_PAID') {
+                    clearInterval(paymentCheckInterval);
+                    qrStatusMessage.textContent = 'Payment Successful!';
+                    qrStatusMessage.style.color = '#10B981';
+                    setTimeout(() => {
+                        hideQrModal();
+                        window.location.href = `invoice-detail.html?id=${invoiceId}`;
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Error checking payment status:', error);
+            }
+        }, 3000); // Check every 3 seconds
+    };
+
+    // --- UPDATED: Event listener to change button text ---
+    [paymentMethodSelect, statusSelect].forEach(el => {
+        el.addEventListener('change', () => {
+            const paymentMethod = paymentMethodSelect.value;
+            const status = statusSelect.value;
+            initialPaymentGroup.style.display = status === 'PARTIALLY_PAID' ? 'block' : 'none';
+
+            if ((status === 'PAID' || status === 'PARTIALLY_PAID') && (paymentMethod === 'UPI')) {
+                saveAndGenerateBtn.innerHTML = '<i class="fas fa-qrcode"></i> Generate QR Code';
+            } else {
+                saveAndGenerateBtn.innerHTML = '<i class="fas fa-save"></i> Save and Generate';
+            }
+        });
+    });
+
+    // --- UPDATED: Main form submission logic ---
     invoiceForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const invoiceData = getInvoiceData();
         if (!invoiceData) return;
 
+        const paymentMethod = paymentMethodSelect.value;
+        const status = statusSelect.value;
+
+        // --- NEW WORKFLOW for Real-time QR Code ---
+        if ((status === 'PAID' || status === 'PARTIALLY_PAID') && (paymentMethod === 'UPI')) {
+            try {
+                const response = await fetchWithAuth('/invoices/create-for-payment', {
+                    method: 'POST',
+                    body: JSON.stringify(invoiceData)
+                });
+                showQrModal(response.paymentLink);
+                startPaymentStatusCheck(response.invoiceId);
+            } catch (error) {
+                alert(`Failed to generate QR Code: ${error.message}`);
+            }
+            return; // Stop here for the QR code flow
+        }
+
+        // --- ORIGINAL WORKFLOW for manual save ---
         try {
             const token = getToken();
             const response = await fetch(`${API_BASE_URL}/invoices`, {

@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script>
 </head>
 <body>
     <div class="app-layout">
@@ -144,6 +145,19 @@
             <td><button type="button" class="btn-delete"><i class="fas fa-trash"></i></button></td>
         </tr>
     </template>
+
+    <div id="qrModal" class="modal-overlay">
+        <div class="modal-content" style="text-align: center;">
+            <div class="modal-header">
+                <h2 id="qr-modal-title">Scan to Pay</h2>
+                <button type="button" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="qrcode" style="display: flex; justify-content: center; margin-bottom: 20px;"></div>
+                <p id="qr-status-message">Waiting for payment confirmation...</p>
+            </div>
+        </div>
+    </div>
 
     <script src="js/api.js"></script>
     <script src="js/theme.js"></script>

@@ -21,6 +21,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const emailCloseBtn = emailModal.querySelector('.modal-close');
     const emailCancelBtn = emailModal.querySelector('.modal-cancel');
     const emailForm = emailModal.querySelector('form');
+    
+    // --- Payment Link Modal Elements ---
+    const linkModal = document.getElementById('linkModal');
+    const linkModalTitle = document.getElementById('link-modal-title');
+    const paymentLinkInput = document.getElementById('paymentLinkInput');
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+    const linkCloseBtn = linkModal.querySelector('.modal-close');
+
 
     let allInvoices = [];
     let currentlyPayingInvoice = null;
@@ -31,7 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentlyPayingInvoice = invoice;
         paymentModalTitle.textContent = `Record Payment for ${invoice.invoiceNumber}`;
         
-        // Correctly determine the balance to pre-fill
         let balanceToPay = invoice.balanceDue;
         if (balanceToPay === null || invoice.status === 'PENDING') {
             balanceToPay = invoice.totalAmount;
@@ -47,13 +54,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentlyPayingInvoice = null;
     };
 
-    // --- THIS IS THE CORRECTED LOGIC ---
     paymentAmountInput.addEventListener('input', () => {
         if (!currentlyPayingInvoice) return;
         
         const amountPaid = parseFloat(paymentAmountInput.value) || 0;
         
-        // Determine the correct current balance
         let currentBalance = currentlyPayingInvoice.balanceDue;
         if (currentBalance === null || currentlyPayingInvoice.status === 'PENDING') {
             currentBalance = currentlyPayingInvoice.totalAmount;
@@ -68,7 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // --- (Email Modal Control is unchanged) ---
+    // --- Email Modal Control ---
     const showEmailModal = async (invoice) => {
         currentlyEmailingInvoice = invoice;
         emailModalTitle.textContent = `Send Invoice ${invoice.invoiceNumber}`;
@@ -87,7 +92,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         emailForm.reset();
         currentlyEmailingInvoice = null;
     };
+    
+    // --- Payment Link Modal Control ---
+    const showLinkModal = (invoice, link) => {
+        linkModalTitle.textContent = `Payment Link for ${invoice.invoiceNumber}`;
+        paymentLinkInput.value = link;
+        linkModal.classList.add('active');
+    };
+    const hideLinkModal = () => {
+        linkModal.classList.remove('active');
+    };
 
+    // --- Event Listeners for Modals ---
     paymentCloseBtn.addEventListener('click', hidePaymentModal);
     paymentCancelBtn.addEventListener('click', hidePaymentModal);
     paymentModal.addEventListener('click', (e) => {
@@ -98,6 +114,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     emailCancelBtn.addEventListener('click', hideEmailModal);
     emailModal.addEventListener('click', (e) => {
         if (e.target === emailModal) hideEmailModal();
+    });
+    
+    linkCloseBtn.addEventListener('click', hideLinkModal);
+    linkModal.addEventListener('click', (e) => {
+        if (e.target === linkModal) hideLinkModal();
+    });
+
+    // Copy link to clipboard
+    copyLinkBtn.addEventListener('click', () => {
+        paymentLinkInput.select();
+        document.execCommand('copy');
+        copyLinkBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        setTimeout(() => {
+            copyLinkBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        }, 2000);
     });
 
     async function loadInvoices() {
@@ -116,7 +147,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         invoicesToRender.forEach(invoice => {
             const statusClass = getStatusClass(invoice.status);
             
-            // Correctly display the balance due
             let balanceDueText = 'N/A';
             if (invoice.balanceDue !== null) {
                 balanceDueText = `₹${invoice.balanceDue.toFixed(2)}`;
@@ -146,6 +176,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <a href="#" title="Send Email" class="action-icon email-btn" data-invoice-id="${invoice.id}">
                             <i class="fas fa-paper-plane"></i>
                         </a>
+                        <a href="#" title="Get Payment Link" class="action-icon link-btn" data-invoice-id="${invoice.id}">
+                            <i class="fas fa-link"></i>
+                        </a>
                         <a href="invoice-detail.html?id=${invoice.id}" title="View Details" class="action-icon">
                             <i class="fas fa-eye"></i>
                         </a>
@@ -163,28 +196,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         return 'status-overdue'; // For CANCELLED
     }
     
-    tableBody.addEventListener('click', (e) => {
+    // FIXED: Table click listener - only prevent default for specific actions
+    tableBody.addEventListener('click', async (e) => {
         const paymentBtn = e.target.closest('.record-payment-btn');
         const emailBtn = e.target.closest('.email-btn');
+        const linkBtn = e.target.closest('.link-btn');
+
+        // Only prevent default if clicking on action buttons/icons (not view links)
+        if (paymentBtn || emailBtn || linkBtn) {
+            e.preventDefault();
+        }
 
         if (paymentBtn) {
             const invoiceId = paymentBtn.dataset.invoiceId;
             const invoice = allInvoices.find(inv => inv.id == invoiceId);
-            if (invoice) {
-                showPaymentModal(invoice);
-            }
+            if (invoice) showPaymentModal(invoice);
         }
 
         if (emailBtn) {
-            e.preventDefault();
             const invoiceId = emailBtn.dataset.invoiceId;
             const invoice = allInvoices.find(inv => inv.id == invoiceId);
-            if (invoice) {
-                showEmailModal(invoice);
+            if (invoice) showEmailModal(invoice);
+        }
+        
+        if (linkBtn) {
+            const invoiceId = linkBtn.dataset.invoiceId;
+            const invoice = allInvoices.find(inv => inv.id == invoiceId);
+            try {
+                const response = await fetchWithAuth(`/payments/create-link/${invoiceId}`, {
+                    method: 'POST'
+                });
+                showLinkModal(invoice, response.paymentLink);
+            } catch (error) {
+                alert(`Could not create payment link: ${error.message}`);
             }
         }
     });
     
+    // Payment form submit
     paymentForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!currentlyPayingInvoice) return;
@@ -208,6 +257,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Email form submit
     emailForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!currentlyEmailingInvoice) return;
@@ -229,6 +279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // Search functionality
     searchInput.addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase();
         const filteredInvoices = allInvoices.filter(invoice =>

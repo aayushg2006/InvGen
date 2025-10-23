@@ -46,7 +46,7 @@ public class Invoice {
     private BigDecimal balanceDue;
 
     public enum Status {
-        PENDING, PAID, PARTIALLY_PAID, CANCELLED
+        PENDING, PAID, PARTIALLY_PAID, CANCELLED, AWAITING_PAYMENT
     }
 
     @OneToMany(mappedBy = "invoice", fetch = FetchType.EAGER, cascade = CascadeType.ALL)

@@ -437,3 +437,22 @@ input[type="color"] {
 [data-theme="dark"] .invoice-details input[type="date"] {
     color-scheme: dark;
 }
+
+/* --- DEFINITIVE FIX for Settings Page Toggle --- */
+
+/* 1. Vertically aligns the text label and the switch */
+.form-row-toggle {
+    align-items: center;
+}
+
+/* 2. Removes extra top padding from the text label */
+.form-row-toggle > label:first-of-type {
+    padding-top: 0;
+}
+
+/* 3. This is the most important part: It forces the switch
+      back to its correct size, overriding the conflicting style. */
+.form-row .switch {
+    width: 50px !important;
+    height: 28px;
+}
