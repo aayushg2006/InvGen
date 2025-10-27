@@ -22,17 +22,14 @@ public class RazorpayService {
     @Value("${razorpay.key.secret}")
     private String keySecret;
 
-    // --- NEW: Injected webhook secret from application.properties ---
     @Value("${razorpay.webhook.secret}")
     private String webhookSecret;
 
     private static final String RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1";
     private static final MediaType JSON_MEDIA_TYPE = MediaType.parse("application/json; charset=utf-8");
 
-    // --- NEW: Method to verify webhook signature ---
     public boolean verifyWebhookSignature(String payload, String signature) {
         try {
-            // This uses the Razorpay SDK's utility to perform a secure comparison
             return Utils.verifyWebhookSignature(payload, signature, this.webhookSecret);
         } catch (RazorpayException e) {
             System.err.println("Webhook signature verification failed: " + e.getMessage());
@@ -41,16 +38,15 @@ public class RazorpayService {
     }
 
     public String createFundAccount(Shop shop) throws RazorpayException, IOException {
-        // Step 1: Create a Contact
+        // ... (this method remains unchanged)
         JSONObject contactRequest = new JSONObject();
         contactRequest.put("name", shop.getBeneficiaryName());
         contactRequest.put("email", shop.getUsers().get(0).getUsername());
         contactRequest.put("type", "vendor");
-        
+
         JSONObject contact = makeRazorpayRequest("/contacts", contactRequest);
         String contactId = contact.getString("id");
 
-        // Step 2: Create a Fund Account
         JSONObject fundAccountRequest = new JSONObject();
         fundAccountRequest.put("contact_id", contactId);
         fundAccountRequest.put("account_type", "bank_account");
@@ -67,16 +63,31 @@ public class RazorpayService {
         return fundAccount.getString("id");
     }
 
+    // --- OVERLOADED METHOD TO KEEP EXISTING CALLS WORKING ---
     public String createPaymentLink(Invoice invoice) throws IOException, RazorpayException {
+        return createPaymentLink(invoice, null); // Call the main method with null amount override
+    }
+
+    // --- THIS IS THE UPDATED METHOD ---
+    public String createPaymentLink(Invoice invoice, BigDecimal amountToPayOverride) throws IOException, RazorpayException {
         JSONObject linkRequest = new JSONObject();
-        
-        long amountInPaise = invoice.getBalanceDue().multiply(new BigDecimal("100")).longValue();
-        
+
+        // Use the override amount if provided, otherwise use the invoice's balance due
+        BigDecimal amountToRequest = (amountToPayOverride != null && amountToPayOverride.compareTo(BigDecimal.ZERO) > 0)
+                                     ? amountToPayOverride
+                                     : invoice.getBalanceDue();
+
+        if (amountToRequest == null || amountToRequest.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount to request for payment link must be greater than zero.");
+        }
+
+        long amountInPaise = amountToRequest.multiply(new BigDecimal("100")).longValue();
+
         linkRequest.put("amount", amountInPaise);
         linkRequest.put("currency", "INR");
-        linkRequest.put("accept_partial", false);
+        linkRequest.put("accept_partial", false); // Important: Never accept partial for this link
         linkRequest.put("description", "Payment for Invoice " + invoice.getInvoiceNumber());
-        
+
         JSONObject customer = new JSONObject();
         customer.put("name", invoice.getCustomer().getName());
         customer.put("email", invoice.getCustomer().getEmail());
@@ -93,12 +104,12 @@ public class RazorpayService {
         notes.put("invoice_id", invoice.getId().toString());
         notes.put("shop_id", invoice.getShop().getId().toString());
         linkRequest.put("notes", notes);
-        
+
         JSONObject response = makeRazorpayRequest("/payment_links", linkRequest);
         return response.getString("short_url");
     }
 
-    // --- Preserved original method for testing ---
+    // ... (rest of the methods: listFundAccounts, makeRazorpayRequest, makeRazorpayGetRequest remain unchanged)
     public String listFundAccounts() throws IOException, RazorpayException {
         JSONObject response = makeRazorpayGetRequest("/fund_accounts");
         return response.toString();
@@ -106,50 +117,38 @@ public class RazorpayService {
 
     private JSONObject makeRazorpayRequest(String endpoint, JSONObject requestBody) throws IOException, RazorpayException {
         OkHttpClient client = new OkHttpClient();
-        
         String credentials = keyId + ":" + keySecret;
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
-
         RequestBody body = RequestBody.create(requestBody.toString(), JSON_MEDIA_TYPE);
-        
         Request request = new Request.Builder()
                 .url(RAZORPAY_API_BASE_URL + endpoint)
                 .header("Authorization", basicAuth)
                 .header("Content-Type", "application/json")
                 .post(body)
                 .build();
-
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body().string();
-            
             if (!response.isSuccessful()) {
                 throw new RazorpayException("Razorpay API Error: " + responseBody);
             }
-            
             return new JSONObject(responseBody);
         }
     }
 
-    // --- Preserved original helper method for GET requests ---
     private JSONObject makeRazorpayGetRequest(String endpoint) throws IOException, RazorpayException {
         OkHttpClient client = new OkHttpClient();
-        
         String credentials = keyId + ":" + keySecret;
         String basicAuth = "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes());
-
         Request request = new Request.Builder()
                 .url(RAZORPAY_API_BASE_URL + endpoint)
                 .header("Authorization", basicAuth)
-                .get() // Use .get() for a GET request
+                .get()
                 .build();
-
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body().string();
-            
             if (!response.isSuccessful()) {
                 throw new RazorpayException("Razorpay API Error: " + responseBody);
             }
-            
             return new JSONObject(responseBody);
         }
     }
